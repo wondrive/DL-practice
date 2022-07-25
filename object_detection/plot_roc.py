@@ -4,13 +4,15 @@ from collections import Counter
 
 
 def plot_roc(pred_boxes, true_boxes, num_classes, iou_threshold=0.5, box_format="corners"):
+     
+     # 본인 클래스로 수정
      classes = {0:'사과', 1:'포도', 2:'배'}
      
      AUCs = []
      TPRs = []
      FPRs = []
 
-     epsilon = 1e-6
+     epsilon = 1e-6      # 추후 수지적 안정을 위해 사용
 
      for c in range(num_classes):
           detections = []
@@ -23,21 +25,29 @@ def plot_roc(pred_boxes, true_boxes, num_classes, iou_threshold=0.5, box_format=
           for true_box in true_boxes:
                if true_box[1] == c:
                     ground_truths.append(true_box)
-                    
+          
+          
+          # gt[0] : 각 이미지별 gt 갯수 세어서 dict 형태로 저장 (class==c)
+          # 예) amount_bboxes = {클래스0:3개, 1:5. 2:7}
           amount_bboxes = Counter([gt[0] for gt in ground_truths])
-
+          
+          # ammount_bboxes = {0:torch.tensor[0,0,0], 1:torch.tensor[0,0,0,0,0]}
           for key, val in amount_bboxes.items():
                amount_bboxes[key] = torch.zeros(val)
 
+          # confidence score 기준 내림차순 정렬
           detections.sort(key=lambda x: x[2], reverse=True)
           TP = torch.zeros((len(detections)))
           FP = torch.zeros((len(detections)))
           total_true_bboxes = len(ground_truths)
           
+          # continue 이유: TP=0이라 recall은 분모가 0이 되어서 계산불가
           if total_true_bboxes == 0:
                continue
           
           for detection_idx, detection in enumerate(detections):
+               
+               # 해당 이미지의 gt 불러옴
                ground_truth_img = [
                     bbox for bbox in ground_truths if bbox[0] == detection[0]
                ]
@@ -61,6 +71,9 @@ def plot_roc(pred_boxes, true_boxes, num_classes, iou_threshold=0.5, box_format=
                          best_gt_idx = idx
 
                if best_iou > iou_threshold:
+                    # (참고) ammount_bboxes = {0:torch.tensor[0,0,0], 1:torch.tensor[0,0,0,0,0]}
+                    # amount_bboxes[ train_idx ][ 객체 idx ]
+                    # 해당 이미지의, 해당 객체 발견하면 1
                     if amount_bboxes[detection[0]][best_gt_idx] == 0:
                          TP[detection_idx] = 1
                          amount_bboxes[detection[0]][best_gt_idx] = 1
@@ -77,7 +90,7 @@ def plot_roc(pred_boxes, true_boxes, num_classes, iou_threshold=0.5, box_format=
           FPR = torch.div(FP_cumsum, (TN_cumsum + FP_cumsum + epsilon)) # 1 - specificity
           TPRs.append(TPR)
           FPRs.append(FPR)
-          AUCs.append(torch.trapz(TPR, FPR))
+          AUCs.append(torch.trapz(TPR, FPR))  # trapz: 적분 (AUC구해줌)
           
      # plot ROC curves
      plt.figure(figsize=(15, 5))
